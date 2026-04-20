@@ -579,4 +579,45 @@ mod tests {
         let warnings = registry.configure_rules(&opts).unwrap();
         assert!(warnings.is_empty());
     }
+
+    #[test]
+    fn configure_rules_propagates_error_from_rule() {
+        /// A test-only rule whose `configure` always fails.
+        struct RejectAllRule;
+        impl Rule for RejectAllRule {
+            fn id(&self) -> &str {
+                "test/reject-all"
+            }
+            fn severity(&self) -> Severity {
+                Severity::Low
+            }
+            fn cwe(&self) -> Option<&str> {
+                None
+            }
+            fn description(&self) -> &str {
+                "test reject"
+            }
+            fn language(&self) -> Language {
+                Language::Python
+            }
+            fn check(&self, _src: &str, _tree: &tree_sitter::Tree) -> Vec<Finding> {
+                vec![]
+            }
+            fn configure(&mut self, _opts: &serde_yaml::Value) -> Result<(), String> {
+                Err("bad options".into())
+            }
+        }
+
+        let mut registry = RuleRegistry::new();
+        registry.register(Box::new(RejectAllRule));
+
+        let mut opts = std::collections::HashMap::new();
+        opts.insert(
+            "test/reject-all".to_string(),
+            serde_yaml::Value::from("anything"),
+        );
+        let err = registry.configure_rules(&opts).unwrap_err();
+        assert!(err.contains("test/reject-all"));
+        assert!(err.contains("bad options"));
+    }
 }
